@@ -337,6 +337,7 @@ def build_chart_html(results, output_path):
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OCI Latency Probe — ECharts</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/theme/dark.js"></script>
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 body{{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#1a1a2e;color:#eee;overflow:hidden;height:100vh}}
@@ -393,7 +394,7 @@ body{{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#1a1a2e;col
       <button onclick="selAll()">Select All</button>
       <button onclick="selNone()">Deselect All</button>
       <button onclick="selBest(5)">Top 5 Fastest</button>
-      <button onclick="selBest(42)">Top 5 Slowest</button>
+      <button onclick="selWorst(5)">Top 5 Slowest</button>
       <button onclick="byRegion()">By Region</button>
       <button onclick="resetChart()">Reset</button>
     </div>
@@ -623,7 +624,16 @@ function selNone() {{
 
 function selBest(n) {{
   const sorted = [...seriesMeta].filter(m => m.avg != null).sort((a,b) => a.avg - b.avg);
-  const ids = new Set(sorted.slice(0, n).map(m => m.id));
+  applySelection(sorted.slice(0, n));
+}}
+
+function selWorst(n) {{
+  const sorted = [...seriesMeta].filter(m => m.avg != null).sort((a,b) => b.avg - a.avg);
+  applySelection(sorted.slice(0, n));
+}}
+
+function applySelection(selected) {{
+  const ids = new Set(selected.map(m => m.id));
   const sel = {{}};
   legendData.forEach(name => {{
     const meta = seriesMeta.find(m => {{
@@ -634,7 +644,7 @@ function selBest(n) {{
   }});
   chart.setOption({{ legend: {{ selected: sel }} }});
   document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-  seriesMeta.forEach((m,i) => {{
+  seriesMeta.forEach(m => {{
     if (ids.has(m.id)) {{
       const cb = document.querySelectorAll('#list_' + m.regionIdx + ' .ep-row input[type=checkbox]')[m.epIdx];
       if (cb) cb.checked = true;
