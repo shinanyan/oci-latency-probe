@@ -449,7 +449,6 @@ DATA.forEach((region, ri) => {{
       smooth: true,
       symbol: 'none',
       lineStyle: {{ color: ep.color, width: 1.5 }},
-      emphasis: {{ lineStyle: {{ width: 3 }} }},
       legendHoverLink: true,
     }});
   }});
@@ -498,6 +497,7 @@ const option = {{
     formatter: function(params) {{
       let s = '<b>Probe ' + params[0].axisValue + '</b><br/>';
       params.forEach(p => {{
+        if (p.value == null) return;
         s += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + p.color + ';margin-right:6px"></span>';
         s += p.seriesName + ': <b>' + p.value.toFixed(1) + ' ms</b><br/>';
       }});
@@ -637,9 +637,10 @@ function toggleEp(id) {{
 
 function selAll() {{
   const sel = {{}};
-  legendData.forEach(n => sel[n] = true);
+  legendData.forEach(n => sel[n] = !n.startsWith('◆'));
   chart.setOption({{ legend: {{ selected: sel }} }});
   document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
+  document.querySelector('button[onclick="byRegion()"]').classList.remove('on');
   updateStats();
   applyClip();
 }}
@@ -686,14 +687,22 @@ function applySelection(selected) {{
 }}
 
 function byRegion() {{
-  // Hide all individual endpoints, show only region average lines
-  const sel = {{}};
-  legendData.forEach(n => sel[n] = n.startsWith('◆'));
-  chart.setOption({{ legend: {{ selected: sel }} }});
-  document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-  document.querySelectorAll('.region-hdr input[type=checkbox]').forEach(cb => cb.checked = true);
-  updateStats();
-  applyClip();
+  // Toggle between showing all endpoints and showing only region averages
+  const btn = document.querySelector('button[onclick="byRegion()"]');
+  const showingRegionAvg = btn.classList.contains('on');
+  if (showingRegionAvg) {{
+    btn.classList.remove('on');
+    selAll();
+  }} else {{
+    btn.classList.add('on');
+    const sel = {{}};
+    legendData.forEach(n => sel[n] = n.startsWith('◆'));
+    chart.setOption({{ legend: {{ selected: sel }} }});
+    document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+    document.querySelectorAll('.region-hdr input[type=checkbox]').forEach(cb => cb.checked = true);
+    updateStats();
+    applyClip();
+  }}
 }}
 
 function resetChart() {{
