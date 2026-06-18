@@ -257,8 +257,94 @@ def build_excel(results: list[dict], output_path: Path):
 
     ws2.freeze_panes = "A3"
 
+    # -------------------------------------------------------------------
+    # Per-region detail sheets
+    # -------------------------------------------------------------------
+    region_groups = {
+        "Asia-Pacific":  {"prefixes": ("ap",),          "name_cn": "亚太地区"},
+        "North America": {"prefixes": ("us", "ca", "mx"), "name_cn": "北美地区"},
+        "South America": {"prefixes": ("sa",),           "name_cn": "南美地区"},
+        "Europe":        {"prefixes": ("uk", "eu", "il"), "name_cn": "欧洲地区"},
+        "Middle East":   {"prefixes": ("me",),           "name_cn": "中东地区"},
+        "Africa":        {"prefixes": ("af",),           "name_cn": "非洲地区"},
+    }
+
+    for region_key, region_info in region_groups.items():
+        region_results = [
+            rec for rec in results
+            if rec["region"].split("-")[0] in region_info["prefixes"]
+        ]
+        _build_region_sheet(wb, region_info["name_cn"], region_results,
+                            header_font, header_fill, header_align,
+                            cell_align, cell_align_left, thin_border,
+                            green_fill, yellow_fill, red_fill)
+
     wb.save(output_path)
     return output_path
+
+
+def _build_region_sheet(wb, sheet_name, results, header_font, header_fill,
+                        header_align, cell_align, cell_align_left, thin_border,
+                        green_fill, yellow_fill, red_fill):
+    """Create a sheet for a single geographic region."""
+    ws = wb.create_sheet(sheet_name)
+
+    # Title
+    ws.merge_cells("A1:K1")
+    ws["A1"].value = f"{sheet_name} — Oracle Cloud Object Storage TCP Latency"
+    ws["A1"].font = Font(name="Microsoft YaHei", bold=True, size=14, color="1F4E79")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 32
+
+    headers = [
+        "Region Code", "Region Name", "Hostname",
+        "Sent", "Received", "Lost", "Loss %",
+        "Min (ms)", "Max (ms)", "Avg (ms)", "Trimmed Avg (ms)",
+    ]
+    col_widths = [18, 24, 48, 8, 10, 8, 10, 12, 12, 12, 18]
+
+    for c, (h, w) in enumerate(zip(headers, col_widths), 1):
+        cell = ws.cell(row=2, column=c, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+        cell.border = thin_border
+        ws.column_dimensions[get_column_letter(c)].width = w
+    ws.row_dimensions[2].height = 28
+
+    for r, rec in enumerate(results, 3):
+        vals = [
+            rec["region"], rec["name"], rec["host"],
+            rec["sent"], rec["received"], rec["lost"], rec["loss_pct"],
+            rec["min_ms"], rec["max_ms"], rec["avg_ms"], rec["trimmed_avg_ms"],
+        ]
+        for c, val in enumerate(vals, 1):
+            cell = ws.cell(row=r, column=c, value=val if val is not None else "N/A")
+            cell.border = thin_border
+            cell.alignment = cell_align_left if c in (1, 2, 3) else cell_align
+
+        lp = rec["loss_pct"]
+        lc = ws.cell(row=r, column=7)
+        if lp == 0:
+            lc.fill = green_fill
+        elif lp < 50:
+            lc.fill = yellow_fill
+        else:
+            lc.fill = red_fill
+
+        avg = rec["avg_ms"]
+        ac = ws.cell(row=r, column=10)
+        if avg is not None:
+            if avg < 100:
+                ac.fill = green_fill
+            elif avg < 300:
+                ac.fill = yellow_fill
+            else:
+                ac.fill = red_fill
+
+    ws.freeze_panes = "A3"
+    if results:
+        ws.auto_filter.ref = f"A2:K{2 + len(results)}"
 
 
 # ---------------------------------------------------------------------------
