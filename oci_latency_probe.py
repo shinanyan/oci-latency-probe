@@ -162,6 +162,11 @@ def _latency_fill(val, st):
         return None
     return st["green"] if val < 100 else (st["yellow"] if val < 300 else st["red"])
 
+def _set_fill(cell, fill):
+    """Set cell fill only if fill is not None (avoids openpyxl crash on None)."""
+    if fill is not None:
+        cell.fill = fill
+
 def _loss_fill(lost, st):
     """Return green/yellow/red fill for lost count."""
     if lost == 0:
@@ -206,10 +211,10 @@ def _build_sheet(ws, title, results, st, merge_end="L"):
         # Color-code: Lost (col 7), Loss% (col 8), Min (col 9), Max (col 10), Avg (col 11), Trimmed (col 12)
         ws.cell(row=r, column=7).fill = _loss_fill(rec["lost"], st)
         ws.cell(row=r, column=8).fill = _loss_fill(rec["lost"], st)
-        ws.cell(row=r, column=9).fill = _latency_fill(rec["min_ms"], st)
-        ws.cell(row=r, column=10).fill = _latency_fill(rec["max_ms"], st)
-        ws.cell(row=r, column=11).fill = _latency_fill(rec["avg_ms"], st)
-        ws.cell(row=r, column=12).fill = _latency_fill(rec["trimmed_avg_ms"], st)
+        _set_fill(ws.cell(row=r, column=9), _latency_fill(rec["min_ms"], st))
+        _set_fill(ws.cell(row=r, column=10), _latency_fill(rec["max_ms"], st))
+        _set_fill(ws.cell(row=r, column=11), _latency_fill(rec["avg_ms"], st))
+        _set_fill(ws.cell(row=r, column=12), _latency_fill(rec["trimmed_avg_ms"], st))
 
     ws.freeze_panes = "A3"
     if results:
@@ -247,7 +252,7 @@ def _build_raw_sheet(wb, results, st):
             cell = ws.cell(row=r, column=5 + i, value=val if val is not None else "N/A")
             cell.border = st["border"]; cell.alignment = st["calign"]
             if val is not None:
-                cell.fill = _latency_fill(val, st)
+                _set_fill(cell, _latency_fill(val, st))
 
     ws.freeze_panes = "E3"
     if results:
