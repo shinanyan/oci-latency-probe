@@ -10,19 +10,29 @@ Oracle Cloud blocks ICMP (ping) on object storage endpoints. This tool measures 
 
 ## Quick Start
 
+### Instant Probe
+
 ```bash
-# 1. Clone
 git clone https://github.com/shinanyan/oci-latency-probe.git
 cd oci-latency-probe
-
-# 2. Install dependencies
 pip install openpyxl
-
-# 3. Run
 python oci_latency_probe.py
 ```
 
-The script probes all 42 endpoints (30 TCP connections each) and writes `oci_latency_report.xlsx` to the current directory.
+The script probes all 42 endpoints (30 TCP connections each) and writes `oci_latency_report.xlsx` + `oci_latency_chart.html`.
+
+### Long-Running Monitor
+
+Continuously probes in cycles. Press `Ctrl+C` to stop anytime — all accumulated data is saved and reports are generated.
+
+```bash
+python oci_monitor.py
+```
+
+Outputs:
+- `oci_monitor_data.json` — raw data, auto-saved every 5 cycles (resume-safe)
+- `oci_monitor_report.xlsx` — cycle summary + per-endpoint aggregate stats
+- `oci_monitor_chart.html` — time-series chart (X=cycle timestamp, Y=avg latency)
 
 ## Requirements
 
