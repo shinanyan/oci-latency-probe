@@ -208,7 +208,29 @@ def build_excel(results: list[dict], output_path: Path):
     ws.auto_filter.ref = f"A2:K{2 + len(results)}"
 
     # -------------------------------------------------------------------
-    # Summary by Region sheet
+    # Per-region detail sheets
+    # -------------------------------------------------------------------
+    region_groups = {
+        "Asia-Pacific":  {"prefixes": ("ap",),          "name_cn": "亚太地区 (APAC)"},
+        "North America": {"prefixes": ("us", "ca", "mx"), "name_cn": "北美地区 (NA)"},
+        "South America": {"prefixes": ("sa",),           "name_cn": "南美地区 (SA)"},
+        "Europe":        {"prefixes": ("uk", "eu", "il"), "name_cn": "欧洲地区 (EU)"},
+        "Middle East":   {"prefixes": ("me",),           "name_cn": "中东地区 (ME)"},
+        "Africa":        {"prefixes": ("af",),           "name_cn": "非洲地区 (AF)"},
+    }
+
+    for region_key, region_info in region_groups.items():
+        region_results = [
+            rec for rec in results
+            if rec["region"].split("-")[0] in region_info["prefixes"]
+        ]
+        _build_region_sheet(wb, region_info["name_cn"], region_results,
+                            header_font, header_fill, header_align,
+                            cell_align, cell_align_left, thin_border,
+                            green_fill, yellow_fill, red_fill)
+
+    # -------------------------------------------------------------------
+    # Summary by Region sheet (last)
     # -------------------------------------------------------------------
     ws2 = wb.create_sheet("Summary by Region")
     regions_order = ["Asia-Pacific", "North America", "South America", "Europe", "Middle East", "Africa"]
@@ -256,28 +278,6 @@ def build_excel(results: list[dict], output_path: Path):
             cell.alignment = cell_align
 
     ws2.freeze_panes = "A3"
-
-    # -------------------------------------------------------------------
-    # Per-region detail sheets
-    # -------------------------------------------------------------------
-    region_groups = {
-        "Asia-Pacific":  {"prefixes": ("ap",),          "name_cn": "亚太地区"},
-        "North America": {"prefixes": ("us", "ca", "mx"), "name_cn": "北美地区"},
-        "South America": {"prefixes": ("sa",),           "name_cn": "南美地区"},
-        "Europe":        {"prefixes": ("uk", "eu", "il"), "name_cn": "欧洲地区"},
-        "Middle East":   {"prefixes": ("me",),           "name_cn": "中东地区"},
-        "Africa":        {"prefixes": ("af",),           "name_cn": "非洲地区"},
-    }
-
-    for region_key, region_info in region_groups.items():
-        region_results = [
-            rec for rec in results
-            if rec["region"].split("-")[0] in region_info["prefixes"]
-        ]
-        _build_region_sheet(wb, region_info["name_cn"], region_results,
-                            header_font, header_fill, header_align,
-                            cell_align, cell_align_left, thin_border,
-                            green_fill, yellow_fill, red_fill)
 
     wb.save(output_path)
     return output_path
