@@ -337,7 +337,6 @@ def build_chart_html(results, output_path):
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OCI Latency Probe — ECharts</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/theme/dark.js"></script>
 <style>
 *{{margin:0;padding:0;box-sizing:border-box}}
 body{{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#1a1a2e;color:#eee;overflow:hidden;height:100vh}}
@@ -457,9 +456,10 @@ DATA.forEach((region, ri) => {{
 
 // ---- Init ECharts ----
 const chartDom = document.getElementById('chart');
-const chart = echarts.init(chartDom, 'dark');
+const chart = echarts.init(chartDom);
 
 const option = {{
+  backgroundColor: '#1a1a2e',
   tooltip: {{
     trigger: 'axis',
     backgroundColor: 'rgba(20,20,40,0.95)',
