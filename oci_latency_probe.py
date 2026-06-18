@@ -394,7 +394,7 @@ body{{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#1a1a2e;col
       <button onclick="selNone()">Deselect All</button>
       <button onclick="selBest(5)">Top 5 Fastest</button>
       <button onclick="selWorst(5)">Top 5 Slowest</button>
-      <button onclick="byRegion()">By Region</button>
+      <button onclick="byRegion()">Region Avg</button>
       <button id="btn-clip" onclick="toggleClip()">Clip Extremes</button>
       <button onclick="resetChart()">Reset</button>
     </div>
@@ -451,6 +451,35 @@ DATA.forEach((region, ri) => {{
       lineStyle: {{ color: ep.color, width: 1.5 }},
       emphasis: {{ lineStyle: {{ width: 3 }} }},
       legendHoverLink: true,
+    }});
+  }});
+  // Region average series (hidden by default)
+  const regionAvgIds = [];
+  const regionColors = ['#FF6B6B','#4ECDC4','#FFE66D','#A78BFA','#F97316','#10B981'];
+  DATA.forEach((region, ri) => {{
+    const rName = region.name;
+    const eps = region.endpoints;
+    const avgData = [];
+    for (let p = 0; p < PC; p++) {{
+      let sum = 0, cnt = 0;
+      eps.forEach(ep => {{
+        if (ep.latencies[p] != null) {{ sum += ep.latencies[p]; cnt++; }}
+      }});
+      avgData.push(cnt > 0 ? +(sum / cnt).toFixed(1) : null);
+    }}
+    const id = 'region_avg_' + ri;
+    regionAvgIds.push(id);
+    legendData.push('◆ ' + rName);
+    series.push({{
+      name: '◆ ' + rName,
+      type: 'line',
+      data: avgData,
+      smooth: true,
+      symbol: 'none',
+      lineStyle: {{ color: regionColors[ri], width: 2.5, type: 'dashed' }},
+      emphasis: {{ lineStyle: {{ width: 4 }} }},
+      legendHoverLink: true,
+      visible: false,
     }});
   }});
 }});
@@ -657,21 +686,12 @@ function applySelection(selected) {{
 }}
 
 function byRegion() {{
-  // Show only the first endpoint of each region for quick comparison
+  // Hide all individual endpoints, show only region average lines
   const sel = {{}};
-  legendData.forEach(n => sel[n] = false);
-  DATA.forEach(region => {{
-    if (region.endpoints.length > 0) {{
-      const name = region.endpoints[0].label + ' (' + region.endpoints[0].label_cn + ')';
-      sel[name] = true;
-    }}
-  }});
+  legendData.forEach(n => sel[n] = n.startsWith('◆'));
   chart.setOption({{ legend: {{ selected: sel }} }});
   document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
-  DATA.forEach((region, ri) => {{
-    const cb = document.querySelectorAll('#list_' + ri + ' .ep-row input[type=checkbox]')[0];
-    if (cb) cb.checked = true;
-  }});
+  document.querySelectorAll('.region-hdr input[type=checkbox]').forEach(cb => cb.checked = true);
   updateStats();
   applyClip();
 }}
