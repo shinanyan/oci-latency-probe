@@ -476,9 +476,7 @@ DATA.forEach((region, ri) => {{
       smooth: true,
       symbol: 'none',
       lineStyle: {{ color: regionColors[ri], width: 2.5, type: 'dashed' }},
-      emphasis: {{ lineStyle: {{ width: 4 }} }},
       legendHoverLink: true,
-      visible: false,
     }});
   }});
 }});
@@ -518,7 +516,7 @@ const option = {{
     pageIconColor: '#5470C6',
     pageIconInactiveColor: '#444',
     data: legendData,
-    selected: {{}}
+    selected: legendData.reduce((acc, n) => {{ acc[n] = !n.startsWith('◆'); return acc; }}, {{}})
   }},
   grid: {{
     left: 55, right: 30, top: 50, bottom: 80
