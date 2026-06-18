@@ -395,6 +395,7 @@ body{{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#1a1a2e;col
       <button onclick="selBest(5)">Top 5 Fastest</button>
       <button onclick="selWorst(5)">Top 5 Slowest</button>
       <button onclick="byRegion()">By Region</button>
+      <button id="btn-clip" onclick="toggleClip()">Clip Extremes</button>
       <button onclick="resetChart()">Reset</button>
     </div>
     <div id="chart"></div>
@@ -423,10 +424,10 @@ DATA.forEach((region, ri) => {{
       ${{region.endpoints.map((ep, ei) => {{
         seriesMeta.push({{id:ep.id, regionIdx:ri, epIdx:ei, avg:ep.avg}});
         return `
-          <div class="ep-row" onclick="toggleEp('${{ep.id}}');event.stopPropagation()">
+          <div class="ep-row">
             <span class="dot" style="background:${{ep.color}}"></span>
             <input type="checkbox" checked onchange="toggleEp('${{ep.id}}');event.stopPropagation()">
-            <span>${{ep.label}}</span>
+            <span style="cursor:pointer" onclick="toggleEp('${{ep.id}}')">${{ep.label}}</span>
             <span class="cn">${{ep.label_cn}}</span>
           </div>`;
       }}).join('')}}
@@ -587,6 +588,7 @@ function toggleRegionSeries(ri, visible) {{
   const cbs = document.querySelectorAll('#list_' + ri + ' .ep-row input[type=checkbox]');
   cbs.forEach(cb => cb.checked = visible);
   updateStats();
+  applyClip();
 }}
 
 function toggleEp(id) {{
@@ -601,6 +603,7 @@ function toggleEp(id) {{
   const cb = document.querySelectorAll('#list_' + meta.regionIdx + ' .ep-row input[type=checkbox]')[meta.epIdx];
   if (cb) cb.checked = newVal;
   updateStats();
+  applyClip();
 }}
 
 function selAll() {{
@@ -609,6 +612,7 @@ function selAll() {{
   chart.setOption({{ legend: {{ selected: sel }} }});
   document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
   updateStats();
+  applyClip();
 }}
 
 function selNone() {{
@@ -617,6 +621,7 @@ function selNone() {{
   chart.setOption({{ legend: {{ selected: sel }} }});
   document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
   updateStats();
+  applyClip();
 }}
 
 function selBest(n) {{
@@ -648,6 +653,7 @@ function applySelection(selected) {{
     }}
   }});
   updateStats();
+  applyClip();
 }}
 
 function byRegion() {{
@@ -667,11 +673,42 @@ function byRegion() {{
     if (cb) cb.checked = true;
   }});
   updateStats();
+  applyClip();
 }}
 
 function resetChart() {{
   chart.dispatchAction({{ type: 'restore' }});
   selAll();
+}}
+
+// ---- Clip extremes ----
+let clipEnabled = false;
+function toggleClip() {{
+  clipEnabled = !clipEnabled;
+  const btn = document.getElementById('btn-clip');
+  btn.classList.toggle('on', clipEnabled);
+  applyClip();
+}}
+
+function applyClip() {{
+  if (!clipEnabled) {{
+    chart.setOption({{ yAxis: {{ max: null }} }});
+    return;
+  }}
+  // Collect all visible latency values
+  const sel = chart.getOption().legend[0].selected;
+  const allVals = [];
+  series.forEach((s, i) => {{
+    const name = legendData[i];
+    if (sel[name] !== false && s.data && s.data.length > 0) {{
+      s.data.forEach(v => allVals.push(v));
+    }}
+  }});
+  if (allVals.length === 0) return;
+  allVals.sort((a,b) => a - b);
+  const p95 = allVals[Math.floor(allVals.length * 0.95)];
+  // Set Y max to p95, but at least 100ms
+  chart.setOption({{ yAxis: {{ max: Math.max(p95, 100) }} }});
 }}
 
 // Sync legend clicks with sidebar
@@ -689,6 +726,7 @@ chart.on('legendselectchanged', function() {{
       }}
     }});
     updateStats();
+  applyClip();
   }}, 50);
 }});
 
@@ -697,6 +735,7 @@ window.addEventListener('resize', () => chart.resize());
 
 // Init stats
 updateStats();
+  applyClip();
 </script>
 </body>
 </html>'''
