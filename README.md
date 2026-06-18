@@ -1,3 +1,5 @@
+[English](README.md) | [中文](README_CN.md)
+
 # OCI Latency Probe 🔭
 
 TCP latency measurement tool for all 42 [Oracle Cloud Object Storage](https://www.oracle.com/cloud/storage/object-storage/) public endpoints worldwide. Generates a color-coded Excel report with min / max / average / trimmed-average latency.
@@ -10,7 +12,7 @@ Oracle Cloud blocks ICMP (ping) on object storage endpoints. This tool measures 
 
 ```bash
 # 1. Clone
-git clone https://github.com/YOUR_USERNAME/oci-latency-probe.git
+git clone https://github.com/shinanyan/oci-latency-probe.git
 cd oci-latency-probe
 
 # 2. Install dependencies
