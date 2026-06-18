@@ -545,9 +545,6 @@ const option = {{
       restore: {{ title: 'Restore' }}
     }}
   }},
-      restore: {{ title: 'Restore' }}
-    }}
-  }},
   series: series
 }};
 
