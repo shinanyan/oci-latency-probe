@@ -367,7 +367,8 @@ body{{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#1a1a2e;col
 .toolbar button{{font-size:11px;padding:5px 12px;border:1px solid #3a3a5a;border-radius:4px;background:transparent;color:#aaa;cursor:pointer;transition:all .15s;white-space:nowrap}}
 .toolbar button:hover{{background:#2a2a5a;color:#ddd;border-color:#5470C6}}
 .toolbar button.on{{background:#5470C6;color:#fff;border-color:#5470C6}}
-#chart{{flex:1;min-height:0}}
+#chart{{flex:1;min-height:0;position:relative}}
+#chart::after{{content:'';position:absolute;right:0;top:0;bottom:0;width:40px;background:linear-gradient(to right,transparent,#1a1a2e);pointer-events:none;z-index:10}}
 </style>
 </head>
 <body>
@@ -474,19 +475,22 @@ const option = {{
   }},
   legend: {{
     type: 'scroll',
-    orient: 'vertical',
-    right: 10,
-    top: 10,
-    bottom: 10,
-    itemWidth: 14,
-    itemHeight: 8,
-    textStyle: {{ color: '#aaa', fontSize: 11 }},
-    pageTextStyle: {{ color: '#888' }},
+    orient: 'horizontal',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    itemWidth: 12,
+    itemHeight: 6,
+    itemGap: 10,
+    textStyle: {{ color: '#999', fontSize: 10 }},
+    pageTextStyle: {{ color: '#777', fontSize: 10 }},
+    pageIconColor: '#5470C6',
+    pageIconInactiveColor: '#444',
     data: legendData,
     selected: {{}}
   }},
   grid: {{
-    left: 55, right: 200, top: 50, bottom: 60
+    left: 55, right: 30, top: 50, bottom: 80
   }},
   xAxis: {{
     type: 'category',
@@ -532,10 +536,14 @@ const option = {{
     }}
   ],
   toolbox: {{
-    right: 10, top: 10,
+    right: 30, top: 5,
+    itemSize: 14,
     feature: {{
       saveAsImage: {{ title: 'Save', backgroundColor: '#1a1a2e' }},
       dataZoom: {{ title: {{ zoom: 'Zoom', back: 'Reset' }} }},
+      restore: {{ title: 'Restore' }}
+    }}
+  }},
       restore: {{ title: 'Restore' }}
     }}
   }},
