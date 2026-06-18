@@ -125,7 +125,7 @@ def probe_host(host, count=PROBE_COUNT):
         lat = tcp_latency(host)
         if lat is not None:
             latencies.append(lat)
-        time.sleep(0.05)
+        time.sleep(0.5)
     return latencies
 
 def trimmed_mean(data, trim_pct=0.10):
@@ -805,6 +805,7 @@ def main():
             sent=PROBE_COUNT, received=received, lost=lost,
             loss_pct=round(lost/PROBE_COUNT*100,1),
             min_ms=mn, max_ms=mx, avg_ms=avg, trimmed_avg_ms=ta, latencies=latencies))
+        time.sleep(1.0)  # gentle gap between endpoints to avoid router flood protection
 
     xlsx_path = Path.cwd() / "oci_latency_report.xlsx"
     build_excel(results, xlsx_path)

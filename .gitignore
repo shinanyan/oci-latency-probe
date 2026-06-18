@@ -22,4 +22,4 @@ env/
 
 # OS
 .DS_Store
-Thumbs.db
+Thumbs.db.playwright-cli/\nchart_preview.png\noci_latency_chart.html\noci_latency_report.xlsx\noci_monitor_data.json\noci_monitor_report.xlsx\noci_monitor_chart.html

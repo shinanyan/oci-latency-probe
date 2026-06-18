@@ -126,7 +126,7 @@ def probe_host(host, count=PROBE_COUNT):
         lat = tcp_latency(host)
         if lat is not None:
             latencies.append(lat)
-        time.sleep(0.05)
+        time.sleep(0.5)
     return latencies
 
 def trimmed_mean(data, trim_pct=0.10):
@@ -701,6 +701,7 @@ def main():
                     "region": region, "name_cn": name_cn, "name_en": name_en, "host": host,
                     "latencies": latencies,
                 })
+                time.sleep(1.0)  # gentle gap between endpoints
 
             if stopped:
                 # Don't save incomplete cycle
