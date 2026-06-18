@@ -5,7 +5,7 @@ Oracle Cloud Object Storage — TCP Latency Probe
 Measures TCP handshake latency (port 443) to all 42 Oracle Cloud
 Object Storage endpoints worldwide. Outputs:
   - oci_latency_report.xlsx   (9-sheet Excel workbook)
-  - oci_latency_chart.html    (interactive Plotly.js line chart)
+  - oci_latency_chart.html    (interactive ECharts visualization)
 
 Usage:
     python oci_latency_probe.py
@@ -18,7 +18,6 @@ import sys
 import time
 from pathlib import Path
 
-# Fix Windows console encoding for special characters
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -97,21 +96,20 @@ ENDPOINTS = [
     ("af-johannesburg-1","南非中部约翰内斯堡",     "Johannesburg, South Africa",    "objectstorage.af-johannesburg-1.oraclecloud.com"),
 ]
 
-# Region grouping (order matters for display)
 REGION_GROUPS = [
-    ("亚太地区 (APAC)",      "Asia-Pacific",      ("ap",),           ["#3366CC", "#4477DD", "#5588EE", "#6699FF", "#77AAFF", "#88BBFF", "#99CCFF", "#AADDFF", "#BBEEFF", "#CCFFFF", "#DDEEFF"]),
-    ("北美地区 (NA)",        "North America",     ("us", "ca", "mx"),["#CC3333", "#DD4444", "#EE5555", "#FF6666", "#FF7777", "#FF8888", "#FF9999", "#FFAAAA"]),
-    ("南美地区 (SA)",        "South America",     ("sa",),           ["#33CC33", "#44DD44", "#55EE55", "#66FF66", "#77FF77"]),
-    ("欧洲地区 (EU)",        "Europe",            ("uk", "eu", "il"),["#CC33CC", "#DD44DD", "#EE55EE", "#FF66FF", "#CC77CC", "#DD88DD", "#EE99EE", "#FFAAFF", "#CCBBCC", "#DDCCDD", "#CC33AA", "#DD44BB", "#EE55CC"]),
-    ("中东地区 (ME)",        "Middle East",       ("me",),           ["#CC6600", "#DD7700", "#EE8800", "#FF9900"]),
-    ("非洲地区 (AF)",        "Africa",            ("af",),           ["#996633"]),
+    ("亚太地区 (APAC)",      ("ap",),           ["#5470C6","#73A0FA","#91CC75","#FAC858","#EE6666","#3BA272","#FC8452","#9A60B4","#EA7CCC","#48B8D0","#6E7074"]),
+    ("北美地区 (NA)",        ("us","ca","mx"),   ["#C1232B","#D7504B","#E87C7E","#F19C9C","#D48265","#E69C87","#F4B7A4","#B5CAA0"]),
+    ("南美地区 (SA)",        ("sa",),            ["#749F83","#91B493","#A8C8A8","#C4DBC4","#94A87C"]),
+    ("欧洲地区 (EU)",        ("uk","eu","il"),   ["#6F4E9B","#8B6BAE","#A78BBF","#C4ABD2","#9B59B6","#A569BD","#B07CC6","#C39BD3","#D2B4DE","#A7C5EB","#B8D3F0","#C9E0F5","#DAECFA"]),
+    ("中东地区 (ME)",        ("me",),            ["#F4A460","#F6B87A","#F8CC94","#FADFAD"]),
+    ("非洲地区 (AF)",        ("af",),            ["#8B7765"]),
 ]
 
 # ===========================================================================
 #  NETWORK PROBE
 # ===========================================================================
 
-def tcp_latency(host: str, port: int = PORT, timeout: float = TIMEOUT) -> float | None:
+def tcp_latency(host, port=PORT, timeout=TIMEOUT):
     """Measure TCP handshake latency (ms). Returns None on failure."""
     try:
         t0 = time.perf_counter()
@@ -120,8 +118,7 @@ def tcp_latency(host: str, port: int = PORT, timeout: float = TIMEOUT) -> float 
     except Exception:
         return None
 
-
-def probe_host(host: str, count: int = PROBE_COUNT) -> list[float]:
+def probe_host(host, count=PROBE_COUNT):
     """Probe host `count` times, return latencies in ms."""
     latencies = []
     for _ in range(count):
@@ -131,8 +128,7 @@ def probe_host(host: str, count: int = PROBE_COUNT) -> list[float]:
         time.sleep(0.05)
     return latencies
 
-
-def trimmed_mean(data: list[float], trim_pct: float = 0.10) -> float | None:
+def trimmed_mean(data, trim_pct=0.10):
     """Mean after trimming top & bottom `trim_pct` extremes."""
     if len(data) < 3:
         return None
@@ -145,7 +141,6 @@ def trimmed_mean(data: list[float], trim_pct: float = 0.10) -> float | None:
 #  EXCEL BUILDER
 # ===========================================================================
 
-# --- Styles ----------------------------------------------------------------
 def _styles():
     return dict(
         hfont=Font(name="Microsoft YaHei", bold=True, size=11, color="FFFFFF"),
@@ -158,16 +153,28 @@ def _styles():
         green=PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"),
         yellow=PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid"),
         red=PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"),
-        title_font=Font(name="Microsoft YaHei", bold=True, size=14, color="1F4E79"),
+        tfont=Font(name="Microsoft YaHei", bold=True, size=14, color="1F4E79"),
     )
 
+def _latency_fill(val, st):
+    """Return green/yellow/red fill for a latency value."""
+    if val is None:
+        return None
+    return st["green"] if val < 100 else (st["yellow"] if val < 300 else st["red"])
 
-# --- Common summary sheet writer -------------------------------------------
-def _write_summary_sheet(ws, title, results, st, merge_end="L"):
-    """Write a summary sheet (main report or per-region)."""
+def _loss_fill(lost, st):
+    """Return green/yellow/red fill for lost count."""
+    if lost == 0:
+        return st["green"]
+    elif lost < 15:
+        return st["yellow"]
+    return st["red"]
+
+def _build_sheet(ws, title, results, st, merge_end="L"):
+    """Write a summary sheet (main or per-region)."""
     ws.merge_cells(f"A1:{merge_end}1")
     ws["A1"].value = title
-    ws["A1"].font = st["title_font"]
+    ws["A1"].font = st["tfont"]
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 32
 
@@ -196,29 +203,26 @@ def _write_summary_sheet(ws, title, results, st, merge_end="L"):
             cell.border = st["border"]
             cell.alignment = st["lalign"] if c <= 4 else st["calign"]
 
-        lp = rec["loss_pct"]
-        lc = ws.cell(row=r, column=8)
-        lc.fill = st["green"] if lp == 0 else (st["yellow"] if lp < 50 else st["red"])
-
-        avg = rec["avg_ms"]
-        ac = ws.cell(row=r, column=11)
-        if avg is not None:
-            ac.fill = st["green"] if avg < 100 else (st["yellow"] if avg < 300 else st["red"])
+        # Color-code: Lost (col 7), Loss% (col 8), Min (col 9), Max (col 10), Avg (col 11), Trimmed (col 12)
+        ws.cell(row=r, column=7).fill = _loss_fill(rec["lost"], st)
+        ws.cell(row=r, column=8).fill = _loss_fill(rec["lost"], st)
+        ws.cell(row=r, column=9).fill = _latency_fill(rec["min_ms"], st)
+        ws.cell(row=r, column=10).fill = _latency_fill(rec["max_ms"], st)
+        ws.cell(row=r, column=11).fill = _latency_fill(rec["avg_ms"], st)
+        ws.cell(row=r, column=12).fill = _latency_fill(rec["trimmed_avg_ms"], st)
 
     ws.freeze_panes = "A3"
     if results:
         ws.auto_filter.ref = f"A2:{merge_end}{2 + len(results)}"
 
-
-# --- Raw data sheet --------------------------------------------------------
-def _write_raw_data_sheet(wb, results, st):
+def _build_raw_sheet(wb, results, st):
     ws = wb.create_sheet("Raw Data")
     n = PROBE_COUNT
     last_col = get_column_letter(4 + n)
 
     ws.merge_cells(f"A1:{last_col}1")
     ws["A1"].value = f"Raw Probe Data — {n} TCP connections per endpoint (ms)"
-    ws["A1"].font = st["title_font"]
+    ws["A1"].font = st["tfont"]
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 32
 
@@ -243,55 +247,22 @@ def _write_raw_data_sheet(wb, results, st):
             cell = ws.cell(row=r, column=5 + i, value=val if val is not None else "N/A")
             cell.border = st["border"]; cell.alignment = st["calign"]
             if val is not None:
-                cell.fill = st["green"] if val < 100 else (st["yellow"] if val < 300 else st["red"])
+                cell.fill = _latency_fill(val, st)
 
     ws.freeze_panes = "E3"
     if results:
         ws.auto_filter.ref = f"A2:{last_col}{2 + len(results)}"
 
-
-# --- Build entire Excel workbook -------------------------------------------
-def build_excel(results: list[dict], output_path: Path):
-    wb = Workbook()
-    st = _styles()
-
-    # 1. Main report
-    ws = wb.active
-    ws.title = "OCI TCP Latency Report"
-    _write_summary_sheet(ws,
-        f"Oracle Cloud Object Storage — TCP Latency Report (port {PORT}, {PROBE_COUNT} probes each)",
-        results, st, merge_end="L")
-
-    # 2-7. Per-region detail
-    for sheet_name, _, prefixes, _ in REGION_GROUPS:
-        region_results = [r for r in results if r["region"].split("-")[0] in prefixes]
-        ws_r = wb.create_sheet(sheet_name)
-        _write_summary_sheet(ws_r,
-            f"{sheet_name} — Oracle Cloud Object Storage TCP Latency",
-            region_results, st, merge_end="L")
-
-    # 8. Raw data
-    _write_raw_data_sheet(wb, results, st)
-
-    # 9. Summary by Region (last)
-    _write_region_summary_sheet(wb, results, st)
-
-    wb.save(output_path)
-    return output_path
-
-
-def _write_region_summary_sheet(wb, results, st):
+def _build_summary_sheet(wb, results, st):
     ws = wb.create_sheet("Summary by Region")
     region_map = {
-        "ap": "Asia-Pacific", "us": "North America", "ca": "North America", "mx": "North America",
-        "sa": "South America",
-        "uk": "Europe", "eu": "Europe", "il": "Europe",
-        "me": "Middle East",
-        "af": "Africa",
+        "ap":"Asia-Pacific","us":"North America","ca":"North America","mx":"North America",
+        "sa":"South America","uk":"Europe","eu":"Europe","il":"Europe",
+        "me":"Middle East","af":"Africa",
     }
-    regions_order = ["Asia-Pacific", "North America", "South America", "Europe", "Middle East", "Africa"]
+    order = ["Asia-Pacific","North America","South America","Europe","Middle East","Africa"]
 
-    summary = {r: [] for r in regions_order}
+    summary = {r:[] for r in order}
     for rec in results:
         grp = region_map.get(rec["region"].split("-")[0], "Other")
         if rec["avg_ms"] is not None:
@@ -299,327 +270,418 @@ def _write_region_summary_sheet(wb, results, st):
 
     ws.merge_cells("A1:D1")
     ws["A1"].value = "Summary by Geographic Region"
-    ws["A1"].font = st["title_font"]
+    ws["A1"].font = st["tfont"]
     ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     ws.row_dimensions[1].height = 32
 
-    for c, (h, w) in enumerate(zip(
-        ["Region", "Endpoints Tested", "Best Avg (ms)", "Worst Avg (ms)"],
-        [24, 20, 18, 18]
-    ), 1):
+    for c,(h,w) in enumerate(zip(["Region","Endpoints Tested","Best Avg (ms)","Worst Avg (ms)"],[24,20,18,18]),1):
         cell = ws.cell(row=2, column=c, value=h)
         cell.font = st["hfont"]; cell.fill = st["hfill"]
         cell.alignment = st["halign"]; cell.border = st["border"]
         ws.column_dimensions[get_column_letter(c)].width = w
 
-    for r, region in enumerate(regions_order, 3):
+    for r, region in enumerate(order, 3):
         avgs = summary[region]
-        for c, val in enumerate([
-            region, len(avgs),
-            round(min(avgs), 2) if avgs else "N/A",
-            round(max(avgs), 2) if avgs else "N/A",
-        ], 1):
+        for c, val in enumerate([region, len(avgs),
+            round(min(avgs),2) if avgs else "N/A",
+            round(max(avgs),2) if avgs else "N/A"], 1):
             cell = ws.cell(row=r, column=c, value=val)
             cell.border = st["border"]; cell.alignment = st["calign"]
-
     ws.freeze_panes = "A3"
 
+def build_excel(results, output_path):
+    wb = Workbook(); st = _styles()
+
+    ws = wb.active; ws.title = "OCI TCP Latency Report"
+    _build_sheet(ws, f"Oracle Cloud Object Storage — TCP Latency Report (port {PORT}, {PROBE_COUNT} probes each)", results, st)
+
+    for sheet_name, prefixes, _ in REGION_GROUPS:
+        region_results = [r for r in results if r["region"].split("-")[0] in prefixes]
+        ws_r = wb.create_sheet(sheet_name)
+        _build_sheet(ws_r, f"{sheet_name} — Oracle Cloud Object Storage TCP Latency", region_results, st)
+
+    _build_raw_sheet(wb, results, st)
+    _build_summary_sheet(wb, results, st)
+    wb.save(output_path)
+    return output_path
+
 # ===========================================================================
-#  INTERACTIVE HTML CHART (Plotly.js via CDN)
+#  ECHARTS HTML CHART
 # ===========================================================================
 
-def build_chart_html(results: list[dict], output_path: Path):
-    """Generate a self-contained HTML file with an interactive Plotly.js chart."""
+def build_chart_html(results, output_path):
+    """Generate a self-contained HTML with an interactive ECharts line chart."""
 
-    # Build data structure for the chart
+    # Build chart data grouped by region
     chart_data = []
-    for sheet_name, region_en, prefixes, colors in REGION_GROUPS:
-        endpoints_in_region = []
+    for sheet_name, prefixes, colors in REGION_GROUPS:
+        eps = []
         region_results = [r for r in results if r["region"].split("-")[0] in prefixes]
         for i, rec in enumerate(region_results):
-            color = colors[i % len(colors)]
-            endpoints_in_region.append({
+            eps.append({
                 "id": rec["region"],
-                "label": f"{rec['name_en']} ({rec['region']})",
+                "label": rec["name_en"],
                 "label_cn": rec["name_cn"],
-                "color": color,
+                "color": colors[i % len(colors)],
                 "latencies": rec.get("latencies", []),
+                "avg": rec.get("avg_ms"),
             })
-        chart_data.append({
-            "region_name": sheet_name,
-            "region_en": region_en,
-            "endpoints": endpoints_in_region,
-        })
+        chart_data.append({"name": sheet_name, "endpoints": eps})
 
-    data_json = json.dumps(chart_data, ensure_ascii=False, indent=2)
-    probe_count = PROBE_COUNT
+    data_json = json.dumps(chart_data, ensure_ascii=False)
 
     html = f'''<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>OCI Latency Chart — TCP Probe Results</title>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<title>OCI Latency Probe — ECharts</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <style>
-  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-  body {{ font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #f5f7fa; color: #333; }}
-  .header {{ background: linear-gradient(135deg, #1a3a5c 0%, #2d6ca2 100%); color: #fff; padding: 20px 32px; }}
-  .header h1 {{ font-size: 22px; font-weight: 600; }}
-  .header p {{ font-size: 13px; opacity: 0.85; margin-top: 4px; }}
-  .layout {{ display: flex; height: calc(100vh - 78px); }}
-  .sidebar {{ width: 320px; min-width: 320px; background: #fff; border-right: 1px solid #e0e4e8; overflow-y: auto; padding: 12px 0; }}
-  .sidebar h3 {{ font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; padding: 8px 16px; margin-top: 4px; }}
-  .region-group {{ border-bottom: 1px solid #f0f0f0; }}
-  .region-header {{ display: flex; align-items: center; padding: 10px 16px; cursor: pointer; user-select: none; font-size: 14px; font-weight: 600; transition: background 0.15s; }}
-  .region-header:hover {{ background: #f8f9fb; }}
-  .region-header .arrow {{ font-size: 10px; margin-right: 8px; transition: transform 0.2s; width: 14px; text-align: center; }}
-  .region-header .arrow.open {{ transform: rotate(90deg); }}
-  .region-header input[type=checkbox] {{ margin-right: 8px; transform: scale(1.1); accent-color: #4472C4; }}
-  .region-header .badge {{ font-size: 11px; background: #e8ecf1; color: #666; border-radius: 10px; padding: 2px 8px; margin-left: auto; }}
-  .endpoint-list {{ display: none; padding: 0 0 8px 0; }}
-  .endpoint-list.open {{ display: block; }}
-  .endpoint-row {{ display: flex; align-items: center; padding: 5px 16px 5px 48px; font-size: 12px; cursor: pointer; transition: background 0.1s; }}
-  .endpoint-row:hover {{ background: #f8f9fb; }}
-  .endpoint-row .color-dot {{ width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0; }}
-  .endpoint-row input[type=checkbox] {{ margin-right: 8px; transform: scale(0.95); accent-color: #4472C4; }}
-  .endpoint-row .cn-name {{ color: #999; margin-left: 6px; font-size: 11px; }}
-  .main {{ flex: 1; display: flex; flex-direction: column; }}
-  .toolbar {{ display: flex; gap: 8px; padding: 10px 16px; background: #fff; border-bottom: 1px solid #e0e4e8; align-items: center; }}
-  .toolbar button {{ font-size: 12px; padding: 6px 14px; border: 1px solid #d0d4d8; border-radius: 4px; background: #fff; cursor: pointer; transition: all 0.15s; }}
-  .toolbar button:hover {{ background: #f0f3f7; border-color: #b0b4b8; }}
-  .toolbar button.primary {{ background: #4472C4; color: #fff; border-color: #4472C4; }}
-  .toolbar button.primary:hover {{ background: #3a62a8; }}
-  .chart-container {{ flex: 1; min-height: 0; }}
-  #chart {{ width: 100%; height: 100%; }}
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:"Segoe UI","Microsoft YaHei",sans-serif;background:#1a1a2e;color:#eee;overflow:hidden;height:100vh}}
+.header{{background:linear-gradient(135deg,#0f0f23 0%,#1a1a3e 100%);padding:14px 24px;border-bottom:1px solid #2a2a4a;display:flex;align-items:center;justify-content:space-between}}
+.header h1{{font-size:18px;font-weight:600;color:#e0e0ff}}
+.header .sub{{font-size:12px;color:#888;margin-top:2px}}
+.header .stats{{display:flex;gap:20px;font-size:12px;color:#aaa}}
+.header .stats span{{color:#7eb8ff}}
+.main{{display:flex;height:calc(100vh - 62px)}}
+.sidebar{{width:300px;min-width:300px;background:#16162b;overflow-y:auto;border-right:1px solid #2a2a4a;padding:8px 0}}
+.sidebar h3{{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:2px;padding:10px 16px 6px}}
+.region-group{{border-bottom:1px solid #1f1f3a}}
+.region-hdr{{display:flex;align-items:center;padding:9px 14px;cursor:pointer;user-select:none;font-size:13px;font-weight:600;color:#ccc;transition:background .15s}}
+.region-hdr:hover{{background:#1e1e38}}
+.region-hdr .arrow{{font-size:10px;margin-right:8px;transition:transform .2s;width:12px;color:#666}}
+.region-hdr .arrow.open{{transform:rotate(90deg)}}
+.region-hdr input{{margin-right:8px;accent-color:#5470C6;transform:scale(1.05)}}
+.region-hdr .badge{{font-size:10px;background:#2a2a4a;color:#888;border-radius:10px;padding:1px 8px;margin-left:auto}}
+.ep-list{{display:none;padding:0 0 6px}}
+.ep-list.open{{display:block}}
+.ep-row{{display:flex;align-items:center;padding:4px 14px 4px 44px;font-size:12px;color:#aaa;cursor:pointer;transition:background .1s}}
+.ep-row:hover{{background:#1e1e38}}
+.ep-row .dot{{width:8px;height:8px;border-radius:50%;margin-right:8px;flex-shrink:0}}
+.ep-row input{{margin-right:8px;accent-color:#5470C6;transform:scale(.9)}}
+.ep-row .cn{{color:#666;margin-left:6px;font-size:11px}}
+.chart-area{{flex:1;display:flex;flex-direction:column;min-width:0}}
+.toolbar{{display:flex;gap:6px;padding:8px 16px;background:#16162b;border-bottom:1px solid #2a2a4a;flex-wrap:wrap}}
+.toolbar button{{font-size:11px;padding:5px 12px;border:1px solid #3a3a5a;border-radius:4px;background:transparent;color:#aaa;cursor:pointer;transition:all .15s;white-space:nowrap}}
+.toolbar button:hover{{background:#2a2a5a;color:#ddd;border-color:#5470C6}}
+.toolbar button.on{{background:#5470C6;color:#fff;border-color:#5470C6}}
+#chart{{flex:1;min-height:0}}
 </style>
 </head>
 <body>
 <div class="header">
-  <h1>OCI Object Storage — TCP Latency Probe Chart</h1>
-  <p>{probe_count} TCP connections per endpoint · port 443 · interactive legend with region/endpoint toggles</p>
+  <div>
+    <h1>OCI Object Storage — TCP Latency Probe</h1>
+    <div class="sub">42 endpoints · {PROBE_COUNT} probes each · port {PORT} · drag to zoom · scroll to navigate</div>
+  </div>
+  <div class="stats">
+    <div>Fastest <span id="stat-best">--</span></div>
+    <div>Slowest <span id="stat-worst">--</span></div>
+    <div>Median <span id="stat-median">--</span></div>
+  </div>
 </div>
-<div class="layout">
+<div class="main">
   <div class="sidebar" id="sidebar">
-    <h3>Toggle Regions</h3>
+    <h3>Toggle Regions &amp; Endpoints</h3>
     <div id="region-list"></div>
   </div>
-  <div class="main">
+  <div class="chart-area">
     <div class="toolbar">
-      <button class="primary" onclick="selectAll()">Select All</button>
-      <button onclick="deselectAll()">Deselect All</button>
-      <button onclick="selectBest()">Top 5 Fastest</button>
-      <button onclick="selectWorst()">Top 5 Slowest</button>
-      <button onclick="resetZoom()">Reset Zoom</button>
+      <button onclick="selAll()">Select All</button>
+      <button onclick="selNone()">Deselect All</button>
+      <button onclick="selBest(5)">Top 5 Fastest</button>
+      <button onclick="selBest(42)">Top 5 Slowest</button>
+      <button onclick="byRegion()">By Region</button>
+      <button onclick="resetChart()">Reset</button>
     </div>
-    <div class="chart-container"><div id="chart"></div></div>
+    <div id="chart"></div>
   </div>
 </div>
 
 <script>
-const CHART_DATA = {data_json};
-const PROBE_COUNT = {probe_count};
-
-// ---- State ----
-const expandedRegions = new Set(CHART_DATA.map(r => r.region_name));
-const seriesVisible = {{}};  // endpointId -> bool
+const DATA = {data_json};
+const PC = {PROBE_COUNT};
 
 // ---- Build sidebar ----
 const regionList = document.getElementById('region-list');
-CHART_DATA.forEach((region, ri) => {{
+const seriesMeta = []; // {{id, regionIdx, epIdx, avg}}
+
+DATA.forEach((region, ri) => {{
   const div = document.createElement('div');
   div.className = 'region-group';
-  const isOpen = expandedRegions.has(region.region_name);
-
   div.innerHTML = `
-    <div class="region-header" onclick="toggleRegion('${{region.region_name}}')">
-      <span class="arrow${{isOpen ? ' open' : ''}}" id="arrow_${{ri}}">&#9654;</span>
-      <input type="checkbox" checked onclick="toggleRegionEndpoints('${{region.region_name}}', this.checked); event.stopPropagation();">
-      <span>${{region.region_name}}</span>
+    <div class="region-hdr" onclick="toggleRegion(${{ri}})">
+      <span class="arrow open" id="arr_${{ri}}">&#9654;</span>
+      <input type="checkbox" checked onchange="toggleRegionSeries(${{ri}},this.checked);event.stopPropagation()">
+      <span>${{region.name}}</span>
       <span class="badge">${{region.endpoints.length}}</span>
     </div>
-    <div class="endpoint-list${{isOpen ? ' open' : ''}}" id="list_${{ri}}">
+    <div class="ep-list open" id="list_${{ri}}">
       ${{region.endpoints.map((ep, ei) => {{
-        seriesVisible[ep.id] = true;
+        seriesMeta.push({{id:ep.id, regionIdx:ri, epIdx:ei, avg:ep.avg}});
         return `
-          <div class="endpoint-row" onclick="toggleEndpoint('${{ep.id}}'); event.stopPropagation();">
-            <span class="color-dot" style="background:${{ep.color}}"></span>
-            <input type="checkbox" checked onclick="toggleEndpoint('${{ep.id}}'); event.stopPropagation();">
+          <div class="ep-row" onclick="toggleEp('${{ep.id}}');event.stopPropagation()">
+            <span class="dot" style="background:${{ep.color}}"></span>
+            <input type="checkbox" checked onchange="toggleEp('${{ep.id}}');event.stopPropagation()">
             <span>${{ep.label}}</span>
-            <span class="cn-name">${{ep.label_cn}}</span>
+            <span class="cn">${{ep.label_cn}}</span>
           </div>`;
       }}).join('')}}
     </div>`;
   regionList.appendChild(div);
 }});
 
-// ---- Plotly chart ----
-const traces = [];
-CHART_DATA.forEach(region => {{
-  region.endpoints.forEach(ep => {{
-    const x = Array.from({{length: ep.latencies.length}}, (_, i) => i + 1);
-    const y = ep.latencies;
-    traces.push({{
-      x: x,
-      y: y,
-      type: 'scatter',
-      mode: 'lines+markers',
-      name: ep.label + ' (' + ep.label_cn + ')',
-      line: {{ color: ep.color, width: 1.5 }},
-      marker: {{ size: 3, color: ep.color }},
-      legendgroup: region.region_name,
-      legendgrouptitle: {{ text: region.region_name }},
-      hovertemplate: '<b>%{{fullData.name}}</b><br>Probe %{{x}}<br>Latency: <b>%{{y:.1f}} ms</b><extra></extra>',
-      visible: true,
-      meta: {{ endpointId: ep.id, regionName: region.region_name }}
+// ---- Build ECharts series ----
+const series = [];
+const legendData = [];
+DATA.forEach((region, ri) => {{
+  region.endpoints.forEach((ep, ei) => {{
+    const name = ep.label + ' (' + ep.label_cn + ')';
+    legendData.push(name);
+    series.push({{
+      name: name,
+      type: 'line',
+      data: ep.latencies,
+      smooth: true,
+      symbol: 'none',
+      lineStyle: {{ color: ep.color, width: 1.5 }},
+      emphasis: {{ lineStyle: {{ width: 3 }} }},
+      legendHoverLink: true,
     }});
   }});
 }});
 
-const layout = {{
-  xaxis: {{
-    title: 'Probe Number',
-    dtick: 5,
-    gridcolor: '#e8e8e8',
-    zeroline: false,
-    range: [0.5, PROBE_COUNT + 0.5]
-  }},
-  yaxis: {{
-    title: 'Latency (ms)',
-    gridcolor: '#e8e8e8',
-    zeroline: false,
-    rangemode: 'tozero'
+// ---- Init ECharts ----
+const chartDom = document.getElementById('chart');
+const chart = echarts.init(chartDom, 'dark');
+
+const option = {{
+  tooltip: {{
+    trigger: 'axis',
+    backgroundColor: 'rgba(20,20,40,0.95)',
+    borderColor: '#3a3a5a',
+    textStyle: {{ color: '#ddd', fontSize: 12 }},
+    formatter: function(params) {{
+      let s = '<b>Probe ' + params[0].axisValue + '</b><br/>';
+      params.forEach(p => {{
+        s += '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + p.color + ';margin-right:6px"></span>';
+        s += p.seriesName + ': <b>' + p.value.toFixed(1) + ' ms</b><br/>';
+      }});
+      return s;
+    }}
   }},
   legend: {{
-    groupclick: 'toggleitem',
-    itemclick: 'toggle',
-    tracegroupgap: 12,
-    font: {{ size: 11 }},
-    x: 1.02, xanchor: 'left',
-    y: 1, yanchor: 'top',
-    bgcolor: 'rgba(255,255,255,0.9)',
-    bordercolor: '#e0e0e0',
-    borderwidth: 1
+    type: 'scroll',
+    orient: 'vertical',
+    right: 10,
+    top: 10,
+    bottom: 10,
+    itemWidth: 14,
+    itemHeight: 8,
+    textStyle: {{ color: '#aaa', fontSize: 11 }},
+    pageTextStyle: {{ color: '#888' }},
+    data: legendData,
+    selected: {{}}
   }},
-  margin: {{ l: 60, r: 20, t: 20, b: 50 }},
-  paper_bgcolor: '#fff',
-  plot_bgcolor: '#fafbfc',
-  hovermode: 'closest',
-  dragmode: 'zoom'
+  grid: {{
+    left: 55, right: 200, top: 50, bottom: 60
+  }},
+  xAxis: {{
+    type: 'category',
+    data: Array.from({{length: PC}}, (_,i) => i+1),
+    name: 'Probe Number',
+    nameTextStyle: {{ color: '#888' }},
+    axisLine: {{ lineStyle: {{ color: '#333' }} }},
+    axisTick: {{ show: false }},
+    axisLabel: {{ color: '#777', fontSize: 11 }},
+    splitLine: {{ show: false }}
+  }},
+  yAxis: {{
+    type: 'value',
+    name: 'Latency (ms)',
+    nameTextStyle: {{ color: '#888' }},
+    axisLine: {{ show: false }},
+    axisTick: {{ show: false }},
+    axisLabel: {{ color: '#777', fontSize: 11 }},
+    splitLine: {{ lineStyle: {{ color: '#222', type: 'dashed' }} }}
+  }},
+  dataZoom: [
+    {{
+      type: 'slider',
+      start: 0, end: 100,
+      height: 24,
+      bottom: 8,
+      borderColor: '#333',
+      backgroundColor: '#1a1a2e',
+      dataBackground: {{
+        lineStyle: {{ color: '#5470C6', opacity: 0.4 }},
+        areaStyle: {{ color: '#5470C6', opacity: 0.1 }}
+      }},
+      selectedDataBackground: {{
+        lineStyle: {{ color: '#5470C6' }},
+        areaStyle: {{ color: '#5470C6', opacity: 0.2 }}
+      }},
+      handleStyle: {{ color: '#5470C6', borderColor: '#5470C6' }},
+      textStyle: {{ color: '#888', fontSize: 10 }}
+    }},
+    {{
+      type: 'inside',
+      start: 0, end: 100
+    }}
+  ],
+  toolbox: {{
+    right: 10, top: 10,
+    feature: {{
+      saveAsImage: {{ title: 'Save', backgroundColor: '#1a1a2e' }},
+      dataZoom: {{ title: {{ zoom: 'Zoom', back: 'Reset' }} }},
+      restore: {{ title: 'Restore' }}
+    }}
+  }},
+  series: series
 }};
 
-const config = {{
-  displayModeBar: true,
-  modeBarButtonsToRemove: ['lasso2d', 'select2d'],
-  displaylogo: false,
-  responsive: true
-}};
+chart.setOption(option);
 
-Plotly.newPlot('chart', traces, layout, config);
-
-// ---- Interactions ----
-function toggleRegion(name) {{
-  const idx = CHART_DATA.findIndex(r => r.region_name === name);
-  const list = document.getElementById('list_' + idx);
-  const arrow = document.getElementById('arrow_' + idx);
-  const isOpen = list.classList.toggle('open');
-  arrow.classList.toggle('open', isOpen);
-}}
-
-function toggleRegionEndpoints(regionName, visible) {{
-  const updates = [];
-  traces.forEach((t, i) => {{
-    if (t.meta.regionName === regionName) {{
-      updates.push({{visible: visible}});
-      seriesVisible[t.meta.endpointId] = visible;
-    }}
+// ---- Stats ----
+function updateStats() {{
+  const visible = seriesMeta.filter(m => {{
+    const name = DATA[m.regionIdx].endpoints[m.epIdx].label + ' (' + DATA[m.regionIdx].endpoints[m.epIdx].label_cn + ')';
+    return chart.getOption().legend[0].selected[name] !== false;
   }});
-  if (updates.length > 0) {{
-    const traceIndices = traces.map((t, i) => t.meta.regionName === regionName ? i : -1).filter(i => i >= 0);
-    Plotly.restyle('chart', {{visible: visible}}, traceIndices);
+  if (visible.length === 0) {{
+    document.getElementById('stat-best').textContent = '--';
+    document.getElementById('stat-worst').textContent = '--';
+    document.getElementById('stat-median').textContent = '--';
+    return;
   }}
-  syncCheckboxes();
+  const avgs = visible.map(m => m.avg).filter(a => a != null);
+  if (avgs.length === 0) return;
+  avgs.sort((a,b)=>a-b);
+  document.getElementById('stat-best').textContent = avgs[0].toFixed(1) + ' ms';
+  document.getElementById('stat-worst').textContent = avgs[avgs.length-1].toFixed(1) + ' ms';
+  document.getElementById('stat-median').textContent = avgs[Math.floor(avgs.length/2)].toFixed(1) + ' ms';
 }}
 
-function toggleEndpoint(endpointId) {{
-  const newVal = !seriesVisible[endpointId];
-  seriesVisible[endpointId] = newVal;
-  const traceIdx = traces.findIndex(t => t.meta.endpointId === endpointId);
-  if (traceIdx >= 0) {{
-    Plotly.restyle('chart', {{visible: newVal}}, [traceIdx]);
-  }}
-  syncCheckboxes();
+// ---- Sidebar interactions ----
+function toggleRegion(ri) {{
+  const list = document.getElementById('list_' + ri);
+  const arrow = document.getElementById('arr_' + ri);
+  list.classList.toggle('open');
+  arrow.classList.toggle('open');
 }}
 
-function syncCheckboxes() {{
-  // Update endpoint checkboxes
-  document.querySelectorAll('.endpoint-row input[type=checkbox]').forEach(cb => {{
-    const row = cb.closest('.endpoint-row');
-    const span = row.querySelector('span:nth-child(3)');
-    if (span) {{
-      const epId = traces.find(t => t.name.startsWith(span.textContent));
-      if (epId) cb.checked = seriesVisible[epId.meta.endpointId] || false;
-    }}
-  }});
+function toggleRegionSeries(ri, visible) {{
+  const names = DATA[ri].endpoints.map(ep => ep.label + ' (' + ep.label_cn + ')');
+  const sel = {{}};
+  names.forEach(n => sel[n] = visible);
+  chart.setOption({{ legend: {{ selected: sel }} }});
+  // sync checkboxes
+  const cbs = document.querySelectorAll('#list_' + ri + ' .ep-row input[type=checkbox]');
+  cbs.forEach(cb => cb.checked = visible);
+  updateStats();
 }}
 
-function selectAll() {{
-  Object.keys(seriesVisible).forEach(k => seriesVisible[k] = true);
-  Plotly.restyle('chart', {{visible: true}}, traces.map((_, i) => i));
+function toggleEp(id) {{
+  const meta = seriesMeta.find(m => m.id === id);
+  if (!meta) return;
+  const ep = DATA[meta.regionIdx].endpoints[meta.epIdx];
+  const name = ep.label + ' (' + ep.label_cn + ')';
+  const current = chart.getOption().legend[0].selected;
+  const newVal = current[name] === false ? true : false;
+  chart.setOption({{ legend: {{ selected: {{ [name]: newVal }} }} }});
+  // sync checkbox
+  const cb = document.querySelectorAll('#list_' + meta.regionIdx + ' .ep-row input[type=checkbox]')[meta.epIdx];
+  if (cb) cb.checked = newVal;
+  updateStats();
+}}
+
+function selAll() {{
+  const sel = {{}};
+  legendData.forEach(n => sel[n] = true);
+  chart.setOption({{ legend: {{ selected: sel }} }});
   document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = true);
+  updateStats();
 }}
 
-function deselectAll() {{
-  Object.keys(seriesVisible).forEach(k => seriesVisible[k] = false);
-  Plotly.restyle('chart', {{visible: false}}, traces.map((_, i) => i));
+function selNone() {{
+  const sel = {{}};
+  legendData.forEach(n => sel[n] = false);
+  chart.setOption({{ legend: {{ selected: sel }} }});
   document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+  updateStats();
 }}
 
-function selectBest() {{
-  // Find 5 endpoints with lowest average latency
-  const avgs = traces.map((t, i) => ({{
-    idx: i, id: t.meta.endpointId,
-    avg: t.y.reduce((a, b) => a + b, 0) / t.y.length
-  }}));
-  avgs.sort((a, b) => a.avg - b.avg);
-  const top5 = new Set(avgs.slice(0, 5).map(a => a.id));
-  // Hide all, show top 5
-  traces.forEach(t => {{
-    seriesVisible[t.meta.endpointId] = top5.has(t.meta.endpointId);
-  }});
-  Plotly.restyle('chart', {{visible: traces.map(t => top5.has(t.meta.endpointId))}});
-  syncCheckboxes();
-}}
-
-function selectWorst() {{
-  const avgs = traces.map((t, i) => ({{
-    idx: i, id: t.meta.endpointId,
-    avg: t.y.reduce((a, b) => a + b, 0) / t.y.length
-  }}));
-  avgs.sort((a, b) => b.avg - a.avg);
-  const top5 = new Set(avgs.slice(0, 5).map(a => a.id));
-  traces.forEach(t => {{
-    seriesVisible[t.meta.endpointId] = top5.has(t.meta.endpointId);
-  }});
-  Plotly.restyle('chart', {{visible: traces.map(t => top5.has(t.meta.endpointId))}});
-  syncCheckboxes();
-}}
-
-function resetZoom() {{
-  Plotly.relayout('chart', {{'xaxis.autorange': true, 'yaxis.autorange': true}});
-}}
-
-// Sync checkboxes on legend click
-document.getElementById('chart').on('plotly_legendclick', function() {{
-  setTimeout(() => {{
-    const visibleMap = {{}};
-    traces.forEach(t => {{
-      visibleMap[t.meta.endpointId] = t.visible !== false;
+function selBest(n) {{
+  const sorted = [...seriesMeta].filter(m => m.avg != null).sort((a,b) => a.avg - b.avg);
+  const ids = new Set(sorted.slice(0, n).map(m => m.id));
+  const sel = {{}};
+  legendData.forEach(name => {{
+    const meta = seriesMeta.find(m => {{
+      const ep = DATA[m.regionIdx].endpoints[m.epIdx];
+      return (ep.label + ' (' + ep.label_cn + ')') === name;
     }});
-    Object.assign(seriesVisible, visibleMap);
-    syncCheckboxes();
-  }}, 100);
+    sel[name] = meta ? ids.has(meta.id) : false;
+  }});
+  chart.setOption({{ legend: {{ selected: sel }} }});
+  document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+  seriesMeta.forEach((m,i) => {{
+    if (ids.has(m.id)) {{
+      const cb = document.querySelectorAll('#list_' + m.regionIdx + ' .ep-row input[type=checkbox]')[m.epIdx];
+      if (cb) cb.checked = true;
+    }}
+  }});
+  updateStats();
+}}
+
+function byRegion() {{
+  // Show only the first endpoint of each region for quick comparison
+  const sel = {{}};
+  legendData.forEach(n => sel[n] = false);
+  DATA.forEach(region => {{
+    if (region.endpoints.length > 0) {{
+      const name = region.endpoints[0].label + ' (' + region.endpoints[0].label_cn + ')';
+      sel[name] = true;
+    }}
+  }});
+  chart.setOption({{ legend: {{ selected: sel }} }});
+  document.querySelectorAll('input[type=checkbox]').forEach(cb => cb.checked = false);
+  DATA.forEach((region, ri) => {{
+    const cb = document.querySelectorAll('#list_' + ri + ' .ep-row input[type=checkbox]')[0];
+    if (cb) cb.checked = true;
+  }});
+  updateStats();
+}}
+
+function resetChart() {{
+  chart.dispatchAction({{ type: 'restore' }});
+  selAll();
+}}
+
+// Sync legend clicks with sidebar
+chart.on('legendselectchanged', function() {{
+  setTimeout(() => {{
+    const sel = chart.getOption().legend[0].selected;
+    document.querySelectorAll('.ep-row input[type=checkbox]').forEach(cb => {{
+      const row = cb.closest('.ep-row');
+      const spans = row.querySelectorAll('span');
+      if (spans.length >= 2) {{
+        const name = spans[1].textContent;
+        const cn = row.querySelector('.cn');
+        const fullName = name + ' (' + (cn ? cn.textContent : '') + ')';
+        cb.checked = sel[fullName] !== false;
+      }}
+    }});
+    updateStats();
+  }}, 50);
 }});
+
+// Resize
+window.addEventListener('resize', () => chart.resize());
+
+// Init stats
+updateStats();
 </script>
 </body>
 </html>'''
@@ -644,41 +706,28 @@ def main():
 
         if received == 0:
             print("ALL FAILED")
-            results.append({
-                "region": region, "name_cn": name_cn, "name_en": name_en, "host": host,
-                "sent": PROBE_COUNT, "received": 0, "lost": lost, "loss_pct": 100.0,
-                "min_ms": None, "max_ms": None, "avg_ms": None, "trimmed_avg_ms": None,
-                "latencies": [],
-            })
+            results.append(dict(region=region, name_cn=name_cn, name_en=name_en, host=host,
+                sent=PROBE_COUNT, received=0, lost=lost, loss_pct=100.0,
+                min_ms=None, max_ms=None, avg_ms=None, trimmed_avg_ms=None, latencies=[]))
             continue
 
-        min_lat = round(min(latencies), 2)
-        max_lat = round(max(latencies), 2)
-        avg_lat = round(statistics.mean(latencies), 2)
-        trim_avg = trimmed_mean(latencies)
+        mn, mx = round(min(latencies),2), round(max(latencies),2)
+        avg = round(statistics.mean(latencies),2)
+        ta = trimmed_mean(latencies)
+        print(f"min={mn}ms  max={mx}ms  avg={avg}ms  trimmed_avg={ta}ms")
+        results.append(dict(region=region, name_cn=name_cn, name_en=name_en, host=host,
+            sent=PROBE_COUNT, received=received, lost=lost,
+            loss_pct=round(lost/PROBE_COUNT*100,1),
+            min_ms=mn, max_ms=mx, avg_ms=avg, trimmed_avg_ms=ta, latencies=latencies))
 
-        print(f"min={min_lat}ms  max={max_lat}ms  avg={avg_lat}ms  trimmed_avg={trim_avg}ms")
-
-        results.append({
-            "region": region, "name_cn": name_cn, "name_en": name_en, "host": host,
-            "sent": PROBE_COUNT, "received": received, "lost": lost,
-            "loss_pct": round(lost / PROBE_COUNT * 100, 1),
-            "min_ms": min_lat, "max_ms": max_lat, "avg_ms": avg_lat, "trimmed_avg_ms": trim_avg,
-            "latencies": latencies,
-        })
-
-    # Generate Excel
     xlsx_path = Path.cwd() / "oci_latency_report.xlsx"
     build_excel(results, xlsx_path)
     print(f"\nExcel report saved to: {xlsx_path}")
 
-    # Generate interactive HTML chart
     html_path = Path.cwd() / "oci_latency_chart.html"
     build_chart_html(results, html_path)
     print(f"Interactive chart saved to: {html_path}")
-
     print("\nDone!")
-
 
 if __name__ == "__main__":
     main()
